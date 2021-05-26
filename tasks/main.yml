@@ -1,0 +1,74 @@
+-   name: "Downloading docker and iproute-tc"
+    yum:
+                 name: ["docker", "iproute-tc"]
+                 state: present
+
+-   name: "Starting services docker" 
+    service:
+                 name: docker
+                 state: restarted
+                 enabled: yes
+
+-   name: "kubernetes Repo Setup"
+    yum_repository:
+                 name: Kubernetes
+                 description: YUM repo for K8s
+                 file: Kubernetes.repo
+                 baseurl: https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+                 gpgkey: https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+                 enabled: yes
+-   name: "Downloading Kubeadm"
+    yum:
+                 name: kubeadm
+                 state: present
+-   name: "Starting kubelet service"
+    service:
+                 name: kubelet
+                 state: restarted
+                 enabled: yes  
+                 
+-   name: "Pull the images" 
+    command: kubeadm config images pull
+
+-   name: "copying daemon.json file"
+    copy:
+                 src: daemon.json
+                 dest: /etc/docker/daemon.json
+
+-   name: "Docker service restarted"
+    service:
+                 name: docker
+                 state: restarted
+                 enabled: yes             
+
+-   name: "Initiate k8s Master Node"
+    command:  kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=NumCPU --ignore-preflight-errors=Mem
+    ignore_errors: yes
+    register: master
+
+-   debug:
+                  var: master    
+
+-   name: "Making current user as a client"
+    shell:       |
+              sudo mkdir -p $HOME/.kube
+              chmod 744 /etc/kubernetes/admin.conf
+              sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+              sudo chown $(id -u):$(id -g) $HOME/.kube/config
+    ignore_errors: yes
+
+-   name: "Downloading Flannel plugin to activating the Nodes"
+    command: "kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml"
+
+-   name: "Token Creation"
+    command: "kubeadm token create --print-join-command"    
+    register: credential
+-   debug:
+          msg: "{{ credential.stdout }}"    
+
+-   name: "Storing credentail to dummy host"
+    add_host:
+                 name: "DUMMYHOST"
+                 NEW_TOKEN: "{{ credential.stdout }}"    
+    ignore_errors: yes            
+
