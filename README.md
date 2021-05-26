@@ -1,0 +1,1 @@
+# k8s-setup-of-master-role
